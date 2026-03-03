@@ -1,0 +1,10 @@
+version: "3.9"
+
+services:
+  api:
+    build: .
+    container_name: vinilo-market-api
+    env_file:
+      - .env
+    ports:
+      - "8080:8080"
