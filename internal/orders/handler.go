@@ -3,11 +3,13 @@ package orders
 import (
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 )
 
 type Handler struct {
-	Service *Service
+	Service  *Service
+	Payments PaymentStarter
 }
 
 func (h *Handler) Checkout(w http.ResponseWriter, r *http.Request) {
@@ -35,13 +37,23 @@ func (h *Handler) Checkout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp := CheckoutResponse{
-		OrderID:   orderID,
-		Status:    "pending",
-		ExpiresAt: expiresAt,
+	var paymentURL string
+	if h.Payments != nil {
+		paymentURL, err = h.Payments.StartPayment(r.Context(), orderID, expiresAt)
+		if err != nil {
+			// Order exists with reserved stock; expiry job will clean up in 10 minutes.
+			log.Printf("checkout: start payment for order %s: %v", orderID, err)
+			http.Error(w, "failed to initiate payment", http.StatusInternalServerError)
+			return
+		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(resp)
+	json.NewEncoder(w).Encode(CheckoutResponse{
+		OrderID:    orderID,
+		Status:     StatusPending,
+		ExpiresAt:  expiresAt,
+		PaymentURL: paymentURL,
+	})
 }

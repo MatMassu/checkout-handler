@@ -1,6 +1,7 @@
 package orders
 
 import (
+	"context"
 	"errors"
 	"time"
 
@@ -39,7 +40,14 @@ type CheckoutRequest struct {
 }
 
 type CheckoutResponse struct {
-	OrderID   uuid.UUID `json:"order_id"`
-	Status    string    `json:"status"`
-	ExpiresAt time.Time `json:"expires_at"`
+	OrderID    uuid.UUID `json:"order_id"`
+	Status     string    `json:"status"`
+	ExpiresAt  time.Time `json:"expires_at"`
+	PaymentURL string    `json:"payment_url"`
+}
+
+// PaymentStarter is implemented by payments.Service.
+// Defined here to keep the dependency direction: payments imports orders, not the reverse.
+type PaymentStarter interface {
+	StartPayment(ctx context.Context, orderID uuid.UUID, expiresAt time.Time) (string, error)
 }

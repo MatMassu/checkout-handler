@@ -107,3 +107,76 @@ func (s *Service) CreateOrder(ctx context.Context, req CheckoutRequest) (uuid.UU
 	}
 	return orderID, expiresAt, nil
 }
+
+// ConfirmPayment transitions an order based on the MercadoPago payment status.
+//
+// Approved payments: stock and reserved both decrease (units are sold).
+// Rejected/cancelled payments: reserved decreases only (units return to available).
+// Pending/in_process and other statuses: no transition — we wait for the next webhook.
+//
+// The order row is locked before the status check to prevent races with the
+// expiry worker or duplicate webhook deliveries.
+func (s *Service) ConfirmPayment(ctx context.Context, orderID uuid.UUID, mpStatus string) error {
+	var newStatus string
+	switch mpStatus {
+	case "approved":
+		newStatus = StatusPaid
+	case "rejected", "cancelled":
+		newStatus = StatusFailed
+	default:
+		// pending, in_process, in_mediation — no action yet
+		return nil
+	}
+
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	var currentStatus string
+	err = tx.QueryRow(ctx,
+		`SELECT status FROM orders WHERE id = $1 FOR UPDATE`,
+		orderID,
+	).Scan(&currentStatus)
+	if err != nil {
+		return err
+	}
+	if currentStatus != StatusPending {
+		return nil // already transitioned (expiry job, duplicate webhook)
+	}
+
+	if newStatus == StatusPaid {
+		// Decrement both stock and reserved — units are sold.
+		_, err = tx.Exec(ctx,
+			`UPDATE products p
+			 SET stock    = p.stock    - oi.quantity,
+			     reserved = p.reserved - oi.quantity
+			 FROM order_items oi
+			 WHERE oi.order_id = $1 AND p.id = oi.product_id`,
+			orderID,
+		)
+	} else {
+		// Release reservation only — units return to available stock.
+		_, err = tx.Exec(ctx,
+			`UPDATE products p
+			 SET reserved = GREATEST(p.reserved - oi.quantity, 0)
+			 FROM order_items oi
+			 WHERE oi.order_id = $1 AND p.id = oi.product_id`,
+			orderID,
+		)
+	}
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.Exec(ctx,
+		`UPDATE orders SET status = $1, updated_at = NOW() WHERE id = $2`,
+		newStatus, orderID,
+	)
+	if err != nil {
+		return err
+	}
+
+	return tx.Commit(ctx)
+}

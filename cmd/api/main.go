@@ -11,7 +11,8 @@ import (
 	"time"
 
 	db "github.com/MatMassu/checkout-handler/internal/database"
-	orders "github.com/MatMassu/checkout-handler/internal/orders"
+	"github.com/MatMassu/checkout-handler/internal/orders"
+	"github.com/MatMassu/checkout-handler/internal/payments"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
 )
@@ -25,17 +26,33 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Services
+	// Orders
 	ordersService := orders.NewService(pool)
-	ordersHandler := &orders.Handler{Service: ordersService}
-
-	// Start expiry worker (checks every minute)
 	go orders.NewExpiryWorker(pool, time.Minute).Run(ctx)
+
+	// Payments
+	mpSandbox := os.Getenv("MERCADOPAGO_SANDBOX") == "true"
+	mpClient := payments.NewClient(os.Getenv("MERCADOPAGO_ACCESS_TOKEN"), mpSandbox)
+	paymentsService := payments.NewService(
+		pool,
+		mpClient,
+		ordersService,
+		os.Getenv("MERCADOPAGO_WEBHOOK_SECRET"),
+		os.Getenv("MERCADOPAGO_NOTIFICATION_URL"),
+	)
+
+	// Handlers
+	ordersHandler := &orders.Handler{
+		Service:  ordersService,
+		Payments: paymentsService,
+	}
+	paymentsHandler := &payments.Handler{Service: paymentsService}
 
 	// Routes
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", healthHandler(pool))
 	mux.HandleFunc("POST /checkout", ordersHandler.Checkout)
+	mux.HandleFunc("POST /payments/webhook", paymentsHandler.Webhook)
 
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -47,7 +64,6 @@ func main() {
 		Handler: mux,
 	}
 
-	// Start server in background so we can listen for shutdown signals.
 	go func() {
 		log.Printf("Server running on :%s", port)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
