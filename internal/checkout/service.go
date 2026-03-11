@@ -53,6 +53,12 @@ func (s *Service) Checkout(ctx context.Context, req dto.CheckoutRequest) (domain
 	return order, paymentURL, nil
 }
 
+// CancelOrder transitions a pending order to cancelled, releasing its stock reservation.
+// Safe to call on already-terminal orders — the repository no-ops in that case.
+func (s *Service) CancelOrder(ctx context.Context, orderID uuid.UUID) error {
+	return s.repo.ConfirmPayment(ctx, orderID, domain.StatusCancelled)
+}
+
 // ConfirmPayment is called by payment.Service via the OrderConfirmer interface.
 // Maps the MercadoPago payment status to an order status and delegates to the repository.
 func (s *Service) ConfirmPayment(ctx context.Context, orderID uuid.UUID, mpStatus string) error {

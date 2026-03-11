@@ -19,6 +19,22 @@ func NewController(service *Service) *Controller {
 	return &Controller{service: service}
 }
 
+func (c *Controller) Cancel(w http.ResponseWriter, r *http.Request) {
+	orderID, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		http.Error(w, "invalid order id", http.StatusBadRequest)
+		return
+	}
+
+	if err := c.service.CancelOrder(r.Context(), orderID); err != nil {
+		log.Printf("cancel order %s: %v", orderID, err)
+		http.Error(w, "failed to cancel order", http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (c *Controller) Checkout(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1 MB
 
