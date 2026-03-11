@@ -1,4 +1,4 @@
-package payments
+package payment
 
 import (
 	"crypto/hmac"
@@ -6,10 +6,19 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 )
 
 var ErrInvalidSignature = errors.New("invalid webhook signature")
+
+func parsePaymentID(s string) (int64, error) {
+	id, err := strconv.ParseInt(s, 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("payment id %q is not a valid integer: %w", s, err)
+	}
+	return id, nil
+}
 
 // validateSignature verifies the x-signature header against the webhook secret.
 //

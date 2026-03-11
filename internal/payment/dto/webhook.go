@@ -1,4 +1,4 @@
-package payments
+package dto
 
 // WebhookNotification is the payload MercadoPago POSTs to our webhook endpoint.
 type WebhookNotification struct {
