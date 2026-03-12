@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"time"
 
+	checkoutdto "github.com/MatMassu/checkout-handler/internal/checkout/dto"
 	"github.com/MatMassu/checkout-handler/internal/domain"
 	"github.com/google/uuid"
 )
@@ -44,6 +45,12 @@ type preferenceBackURLs struct {
 	Pending string `json:"pending"`
 }
 
+type preferencePayer struct {
+	Email     string `json:"email,omitempty"`
+	FirstName string `json:"first_name,omitempty"`
+	LastName  string `json:"last_name,omitempty"`
+}
+
 type preferenceRequest struct {
 	Items             []preferenceItem   `json:"items"`
 	BackURLs          preferenceBackURLs `json:"back_urls"`
@@ -52,6 +59,7 @@ type preferenceRequest struct {
 	ExternalReference string             `json:"external_reference"`
 	Expires           bool               `json:"expires"`
 	ExpirationDateTo  string             `json:"expiration_date_to"`
+	Payer             preferencePayer    `json:"payer,omitempty"`
 }
 
 type preferenceResponse struct {
@@ -62,7 +70,7 @@ type preferenceResponse struct {
 
 // CreatePreference creates a MercadoPago checkout preference for the given order.
 // Returns the preference ID and the appropriate checkout URL (sandbox or production).
-func (r *MercadoPago) CreatePreference(ctx context.Context, orderID uuid.UUID, amount int64, expiresAt time.Time) (string, string, error) {
+func (r *MercadoPago) CreatePreference(ctx context.Context, orderID uuid.UUID, amount int64, expiresAt time.Time, payer checkoutdto.PayerInfo) (string, string, error) {
 	req := preferenceRequest{
 		Items: []preferenceItem{{
 			Title:     "Vinilo Market",
@@ -79,6 +87,11 @@ func (r *MercadoPago) CreatePreference(ctx context.Context, orderID uuid.UUID, a
 		ExternalReference: orderID.String(),
 		Expires:           true,
 		ExpirationDateTo:  expiresAt.Format(time.RFC3339),
+		Payer: preferencePayer{
+			Email:     payer.Email,
+			FirstName: payer.FirstName,
+			LastName:  payer.LastName,
+		},
 	}
 
 	body, err := json.Marshal(req)

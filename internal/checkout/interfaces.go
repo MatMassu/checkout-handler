@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/MatMassu/checkout-handler/internal/checkout/dto"
 	"github.com/MatMassu/checkout-handler/internal/domain"
 	"github.com/google/uuid"
 )
@@ -30,5 +31,5 @@ type Repository interface {
 // PaymentStarter is implemented by payment.Service.
 // Defined here to keep the dependency direction: payment imports checkout, not the reverse.
 type PaymentStarter interface {
-	StartPayment(ctx context.Context, orderID uuid.UUID, amount int64, expiresAt time.Time) (string, error)
+	StartPayment(ctx context.Context, orderID uuid.UUID, amount int64, expiresAt time.Time, payer dto.PayerInfo) (string, error)
 }

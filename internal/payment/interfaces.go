@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/MatMassu/checkout-handler/internal/checkout/dto"
 	"github.com/MatMassu/checkout-handler/internal/domain"
 	"github.com/google/uuid"
 )
@@ -24,7 +25,7 @@ type DBRepository interface {
 type MPRepository interface {
 	// CreatePreference creates a checkout preference and returns its ID and the checkout URL.
 	// The URL is the sandbox URL or production URL depending on repository configuration.
-	CreatePreference(ctx context.Context, orderID uuid.UUID, amount int64, expiresAt time.Time) (preferenceID string, checkoutURL string, err error)
+	CreatePreference(ctx context.Context, orderID uuid.UUID, amount int64, expiresAt time.Time, payer dto.PayerInfo) (preferenceID string, checkoutURL string, err error)
 
 	// GetPayment fetches a payment from the MercadoPago API by its numeric ID.
 	GetPayment(ctx context.Context, paymentID int64) (domain.MPPayment, error)

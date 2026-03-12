@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	checkoutdto "github.com/MatMassu/checkout-handler/internal/checkout/dto"
 	"github.com/MatMassu/checkout-handler/internal/payment/dto"
 	"github.com/google/uuid"
 )
@@ -22,8 +23,8 @@ func NewService(db DBRepository, mp MPRepository, orders OrderConfirmer, webhook
 
 // StartPayment creates a MercadoPago preference and records the pending payment.
 // Returns the checkout URL to redirect the user to.
-func (s *Service) StartPayment(ctx context.Context, orderID uuid.UUID, amount int64, expiresAt time.Time) (string, error) {
-	preferenceID, checkoutURL, err := s.mp.CreatePreference(ctx, orderID, amount, expiresAt)
+func (s *Service) StartPayment(ctx context.Context, orderID uuid.UUID, amount int64, expiresAt time.Time, payer checkoutdto.PayerInfo) (string, error) {
+	preferenceID, checkoutURL, err := s.mp.CreatePreference(ctx, orderID, amount, expiresAt, payer)
 	if err != nil {
 		return "", fmt.Errorf("create preference: %w", err)
 	}
