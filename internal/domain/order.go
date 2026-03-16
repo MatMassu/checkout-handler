@@ -17,6 +17,15 @@ type Order struct {
 	ExpiresAt      time.Time
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
+	Items          []OrderItem
+}
+
+type OrderItem struct {
+	ProductID uuid.UUID
+	Artist    string
+	Title     string
+	Quantity  int
+	UnitPrice int64
 }
 
 type Product struct {

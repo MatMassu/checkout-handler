@@ -44,7 +44,7 @@ func (s *Service) Checkout(ctx context.Context, req dto.CheckoutRequest) (domain
 
 	var paymentURL string
 	if s.payments != nil {
-		paymentURL, err = s.payments.StartPayment(ctx, order.ID, order.TotalAmount, order.ExpiresAt, req.Payer)
+		paymentURL, err = s.payments.StartPayment(ctx, order.ID, order.TotalAmount, order.ExpiresAt, order.Items, req.Payer)
 		if err != nil {
 			return domain.Order{}, "", fmt.Errorf("start payment: %w", err)
 		}

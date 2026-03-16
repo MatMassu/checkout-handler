@@ -37,15 +37,21 @@ func (r *Postgres) CreateOrder(ctx context.Context, userID uuid.UUID, productIDs
 	}
 	defer tx.Rollback(ctx)
 
-	// Lock rows, validate stock, collect prices.
-	prices := make(map[uuid.UUID]int64, len(sorted))
+	// Lock rows, validate stock, collect prices and product names.
+	type productInfo struct {
+		price  int64
+		artist string
+		title  string
+	}
+	info := make(map[uuid.UUID]productInfo, len(sorted))
 	for _, productID := range sorted {
 		var price int64
 		var stock, reserved int
+		var artist, title string
 		err := tx.QueryRow(ctx,
-			`SELECT price, stock, reserved FROM products WHERE id = $1 FOR UPDATE`,
+			`SELECT price, stock, reserved, artist, title FROM products WHERE id = $1 FOR UPDATE`,
 			productID,
-		).Scan(&price, &stock, &reserved)
+		).Scan(&price, &stock, &reserved, &artist, &title)
 		if err == pgx.ErrNoRows {
 			return domain.Order{}, domain.ErrProductNotFound
 		}
@@ -55,13 +61,13 @@ func (r *Postgres) CreateOrder(ctx context.Context, userID uuid.UUID, productIDs
 		if stock-reserved < quantities[productID] {
 			return domain.Order{}, domain.ErrInsufficientStock
 		}
-		prices[productID] = price
+		info[productID] = productInfo{price: price, artist: artist, title: title}
 	}
 
 	// Compute subtotal.
 	var subtotal int64
 	for productID, qty := range quantities {
-		subtotal += prices[productID] * int64(qty)
+		subtotal += info[productID].price * int64(qty)
 	}
 
 	// Insert order; expires_at is set by the DB clock.
@@ -81,10 +87,11 @@ func (r *Postgres) CreateOrder(ctx context.Context, userID uuid.UUID, productIDs
 		return domain.Order{}, err
 	}
 
-	// Insert order items and reserve stock.
+	// Insert order items, reserve stock, and build domain.OrderItems.
+	orderItems := make([]domain.OrderItem, 0, len(sorted))
 	for _, productID := range sorted {
 		qty := quantities[productID]
-		unitPrice := prices[productID]
+		unitPrice := info[productID].price
 
 		_, err = tx.Exec(ctx,
 			`INSERT INTO order_items (id, order_id, product_id, quantity, unit_price, total_price)
@@ -102,7 +109,16 @@ func (r *Postgres) CreateOrder(ctx context.Context, userID uuid.UUID, productIDs
 		if err != nil {
 			return domain.Order{}, err
 		}
+
+		orderItems = append(orderItems, domain.OrderItem{
+			ProductID: productID,
+			Artist:    info[productID].artist,
+			Title:     info[productID].title,
+			Quantity:  qty,
+			UnitPrice: unitPrice,
+		})
 	}
+	order.Items = orderItems
 
 	if err := tx.Commit(ctx); err != nil {
 		return domain.Order{}, err

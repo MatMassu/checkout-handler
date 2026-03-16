@@ -34,9 +34,12 @@ func NewMercadoPago(accessToken string, sandbox bool, notificationURL string) *M
 }
 
 type preferenceItem struct {
-	Title     string  `json:"title"`
-	Quantity  int     `json:"quantity"`
-	UnitPrice float64 `json:"unit_price"`
+	ID          string  `json:"id"`
+	Title       string  `json:"title"`
+	Description string  `json:"description,omitempty"`
+	CategoryID  string  `json:"category_id"`
+	Quantity    int     `json:"quantity"`
+	UnitPrice   float64 `json:"unit_price"`
 }
 
 type preferenceBackURLs struct {
@@ -52,14 +55,15 @@ type preferencePayer struct {
 }
 
 type preferenceRequest struct {
-	Items             []preferenceItem   `json:"items"`
-	BackURLs          preferenceBackURLs `json:"back_urls"`
-	AutoReturn        string             `json:"auto_return"`
-	NotificationURL   string             `json:"notification_url,omitempty"`
-	ExternalReference string             `json:"external_reference"`
-	Expires           bool               `json:"expires"`
-	ExpirationDateTo  string             `json:"expiration_date_to"`
-	Payer             preferencePayer    `json:"payer,omitempty"`
+	Items               []preferenceItem   `json:"items"`
+	BackURLs            preferenceBackURLs `json:"back_urls"`
+	AutoReturn          string             `json:"auto_return"`
+	NotificationURL     string             `json:"notification_url,omitempty"`
+	ExternalReference   string             `json:"external_reference"`
+	Expires             bool               `json:"expires"`
+	ExpirationDateTo    string             `json:"expiration_date_to"`
+	Payer               preferencePayer    `json:"payer,omitempty"`
+	StatementDescriptor string             `json:"statement_descriptor,omitempty"`
 }
 
 type preferenceResponse struct {
@@ -70,28 +74,36 @@ type preferenceResponse struct {
 
 // CreatePreference creates a MercadoPago checkout preference for the given order.
 // Returns the preference ID and the appropriate checkout URL (sandbox or production).
-func (r *MercadoPago) CreatePreference(ctx context.Context, orderID uuid.UUID, amount int64, expiresAt time.Time, payer checkoutdto.PayerInfo) (string, string, error) {
+func (r *MercadoPago) CreatePreference(ctx context.Context, orderID uuid.UUID, amount int64, expiresAt time.Time, items []domain.OrderItem, payer checkoutdto.PayerInfo) (string, string, error) {
+	prefItems := make([]preferenceItem, len(items))
+	for i, item := range items {
+		prefItems[i] = preferenceItem{
+			ID:         item.ProductID.String(),
+			Title:      fmt.Sprintf("%s - %s", item.Artist, item.Title),
+			CategoryID: "others",
+			Quantity:   item.Quantity,
+			UnitPrice:  float64(item.UnitPrice),
+		}
+	}
+
 	req := preferenceRequest{
-		Items: []preferenceItem{{
-			Title:     "Vinilo Market",
-			Quantity:  1,
-			UnitPrice: float64(amount),
-		}},
+		Items: prefItems,
 		BackURLs: preferenceBackURLs{
 			Success: "https://vinilomarket.vercel.app/success",
 			Failure: "https://vinilomarket.vercel.app/failure",
 			Pending: "https://vinilomarket.vercel.app/pending",
 		},
-		AutoReturn:        "approved",
-		NotificationURL:   r.notificationURL,
-		ExternalReference: orderID.String(),
-		Expires:           true,
-		ExpirationDateTo:  expiresAt.Format(time.RFC3339),
+		AutoReturn:          "approved",
+		NotificationURL:     r.notificationURL,
+		ExternalReference:   orderID.String(),
+		Expires:             true,
+		ExpirationDateTo:    expiresAt.Format(time.RFC3339),
 		Payer: preferencePayer{
 			Email:     payer.Email,
 			FirstName: payer.FirstName,
 			LastName:  payer.LastName,
 		},
+		StatementDescriptor: "VINILOMARKET",
 	}
 
 	body, err := json.Marshal(req)

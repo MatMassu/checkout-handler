@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 )
 
+
 // Repository abstracts all persistence operations for the checkout feature.
 // The postgres implementation owns transaction boundaries — each method is atomic.
 type Repository interface {
@@ -31,5 +32,5 @@ type Repository interface {
 // PaymentStarter is implemented by payment.Service.
 // Defined here to keep the dependency direction: payment imports checkout, not the reverse.
 type PaymentStarter interface {
-	StartPayment(ctx context.Context, orderID uuid.UUID, amount int64, expiresAt time.Time, payer dto.PayerInfo) (string, error)
+	StartPayment(ctx context.Context, orderID uuid.UUID, amount int64, expiresAt time.Time, items []domain.OrderItem, payer dto.PayerInfo) (string, error)
 }
